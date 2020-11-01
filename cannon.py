@@ -17,29 +17,30 @@ def rand_color():
 
 
 class GameObject:
-    pass
+    def __init__(self, coord, color):
+        self.coord = coord
+        self.color = color
 
 
 class Shell(GameObject):
     """
-    The ball class. Creates a ball, controls it's movement and implement it's rendering.
+    The shell class. Creates a shell, controls it's movement and implement it's rendering.
     """
 
     def __init__(self, coord, vel, rad=20, color=None):
         """
-        Constructor method. Initializes ball's parameters and initial values.
+        Constructor method. Initializes shell's parameters and initial values.
         """
-        self.coord = coord
-        self.vel = vel
         if color is None:
             color = rand_color()
-        self.color = color
+        super().__init__(coord, color)
+        self.vel = vel
         self.rad = rad
         self.is_alive = True
 
     def check_corners(self, refl_ort=0.8, refl_par=0.9):
         """
-        Reflects ball's velocity when ball bumps into the screen corners. Implements inelastic rebound.
+        Reflects shell's velocity when shell bumps into the screen corners. Implements inelastic rebound.
         """
         for i in range(2):
             if self.coord[i] < self.rad:
@@ -53,8 +54,8 @@ class Shell(GameObject):
 
     def move(self, time=1, grav=0):
         """
-        Moves the ball according to it's velocity and time step.
-        Changes the ball's velocity due to gravitational force.
+        Moves the shell according to it's velocity and time step.
+        Changes the shell's velocity due to gravitational force.
         """
         self.vel[1] += grav
         for i in range(2):
@@ -65,7 +66,7 @@ class Shell(GameObject):
 
     def draw(self, screen):
         """
-        Draws the ball on appropriate surface.
+        Draws the shell on appropriate surface.
         """
         pg.draw.circle(screen, self.color, self.coord, self.rad)
 
@@ -81,11 +82,10 @@ class Cannon(GameObject):
         """
         if coord is None:
             coord = [30, SCREEN_SIZE[1] // 2]
-        self.coord = coord
+        super().__init__(coord, color)
         self.angle = angle
         self.max_pow = max_pow
         self.min_pow = min_pow
-        self.color = color
         self.active = False
         self.pow = min_pow
 
@@ -104,14 +104,14 @@ class Cannon(GameObject):
 
     def strike(self):
         """
-        Creates ball, according to gun's direction and current charge power.
+        Creates shell, according to gun's direction and current charge power.
         """
         vel = self.pow
         angle = self.angle
-        ball = Shell(list(self.coord), [int(vel * np.cos(angle)), int(vel * np.sin(angle))])
+        shell = Shell(list(self.coord), [int(vel * np.cos(angle)), int(vel * np.sin(angle))])
         self.pow = self.min_pow
         self.active = False
-        return ball
+        return shell
 
     def set_angle(self, target_pos):
         """
@@ -143,7 +143,7 @@ class Cannon(GameObject):
 
 class Target(GameObject):
     """
-    Target class. Creates target, manages it's rendering and collision with a ball event.
+    Target class. Creates target, manages it's rendering and collision with a shell event.
     """
 
     def __init__(self, coord=None, color=None, rad=30):
@@ -152,19 +152,17 @@ class Target(GameObject):
         """
         if coord is None:
             coord = [randint(rad, SCREEN_SIZE[0] - rad), randint(rad, SCREEN_SIZE[1] - rad)]
-        self.coord = coord
-        self.rad = rad
-
         if color is None:
             color = rand_color()
-        self.color = color
+        super().__init__(coord, color)
+        self.rad = rad
 
-    def check_collision(self, ball):
+    def check_collision(self, shell):
         """
-        Checks whether the ball bumps into target.
+        Checks whether the shell bumps into target.
         """
-        dist = sum([(self.coord[i] - ball.coord[i]) ** 2 for i in range(2)]) ** 0.5
-        min_dist = self.rad + ball.rad
+        dist = sum([(self.coord[i] - shell.coord[i]) ** 2 for i in range(2)]) ** 0.5
+        min_dist = self.rad + shell.rad
         return dist <= min_dist
 
     def draw(self, screen):
@@ -211,7 +209,7 @@ class ScoreTable:
     def draw(self, screen):
         score_surf = [
             self.font.render("Destroyed: {}".format(self.t_destr), True, WHITE),
-            self.font.render("Balls used: {}".format(self.b_used), True, WHITE),
+            self.font.render("Shells used: {}".format(self.b_used), True, WHITE),
             self.font.render("Total: {}".format(self.score()), True, RED)
         ]
         for i in range(3):
@@ -220,11 +218,11 @@ class ScoreTable:
 
 class Manager:
     """
-    Class that manages events' handling, ball's motion and collision, target creation, etc.
+    Class that manages events' handling, shell's motion and collision, target creation, etc.
     """
 
     def __init__(self, n_targets=1):
-        self.balls = []
+        self.shells = []
         self.gun = Cannon()
         self.targets = []
         self.score_t = ScoreTable()
@@ -256,7 +254,7 @@ class Manager:
         self.collide()
         self.draw(screen)
 
-        if len(self.targets) == 0 and len(self.balls) == 0:
+        if len(self.targets) == 0 and len(self.shells) == 0:
             self.new_mission()
 
         return done
@@ -279,16 +277,16 @@ class Manager:
                     self.gun.activate()
             elif event.type == pg.MOUSEBUTTONUP:
                 if event.button == 1:
-                    self.balls.append(self.gun.strike())
+                    self.shells.append(self.gun.strike())
                     self.score_t.b_used += 1
         return done
 
     def draw(self, screen):
         """
-        Runs balls', gun's, targets' and score table's drawing method.
+        Runs shells', gun's, targets' and score table's drawing method.
         """
-        for ball in self.balls:
-            ball.draw(screen)
+        for shell in self.shells:
+            shell.draw(screen)
         for target in self.targets:
             target.draw(screen)
         self.gun.draw(screen)
@@ -296,28 +294,28 @@ class Manager:
 
     def move(self):
         """
-        Runs balls' and gun's movement method, removes dead balls.
+        Runs shells' and gun's movement method, removes dead shells.
         """
-        dead_balls = []
-        for i, ball in enumerate(self.balls):
-            ball.move(grav=2)
-            if not ball.is_alive:
-                dead_balls.append(i)
-        for i in reversed(dead_balls):
-            self.balls.pop(i)
+        dead_shells = []
+        for i, shell in enumerate(self.shells):
+            shell.move(grav=2)
+            if not shell.is_alive:
+                dead_shells.append(i)
+        for i in reversed(dead_shells):
+            self.shells.pop(i)
         for i, target in enumerate(self.targets):
             target.move()
         self.gun.gain()
 
     def collide(self):
         """
-        Checks whether balls bump into targets, sets balls' alive trigger.
+        Checks whether shells bump into targets, sets shells' alive trigger.
         """
         collisions = []
         targets_c = []
-        for i, ball in enumerate(self.balls):
+        for i, shell in enumerate(self.shells):
             for j, target in enumerate(self.targets):
-                if target.check_collision(ball):
+                if target.check_collision(shell):
                     collisions.append([i, j])
                     targets_c.append(j)
         targets_c.sort()
