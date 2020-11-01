@@ -17,9 +17,44 @@ def rand_color():
 
 
 class GameObject:
-    def __init__(self, coord, color):
+    def __init__(self, coord, color, rad=None, vel=None):
+        """
+        Have coord and color.
+        """
         self.coord = coord
         self.color = color
+        if not (rad is None):
+            self.rad = rad
+        if not (vel is None):
+            self.vel = vel
+        self.is_alive = True
+
+    def move(self, inc=None):
+        """
+        Sets movement.
+        """
+        pass
+
+    def draw(self, screen):
+        """
+        Draws the object.
+        """
+        pass
+
+    def check_corners(self, refl_ort, refl_par):
+        """
+        Reflects object's velocity when object bumps into the screen corners. Implements inelastic rebound.
+        """
+        if not (self.vel is None or self.rad is None):
+            for i in range(2):
+                if self.coord[i] < self.rad:
+                    self.coord[i] = self.rad
+                    self.vel[i] = -int(self.vel[i] * refl_ort)
+                    self.vel[1 - i] = int(self.vel[1 - i] * refl_par)
+                elif self.coord[i] > SCREEN_SIZE[i] - self.rad:
+                    self.coord[i] = SCREEN_SIZE[i] - self.rad
+                    self.vel[i] = -int(self.vel[i] * refl_ort)
+                    self.vel[1 - i] = int(self.vel[1 - i] * refl_par)
 
 
 class Shell(GameObject):
@@ -33,24 +68,7 @@ class Shell(GameObject):
         """
         if color is None:
             color = rand_color()
-        super().__init__(coord, color)
-        self.vel = vel
-        self.rad = rad
-        self.is_alive = True
-
-    def check_corners(self, refl_ort=0.8, refl_par=0.9):
-        """
-        Reflects shell's velocity when shell bumps into the screen corners. Implements inelastic rebound.
-        """
-        for i in range(2):
-            if self.coord[i] < self.rad:
-                self.coord[i] = self.rad
-                self.vel[i] = -int(self.vel[i] * refl_ort)
-                self.vel[1 - i] = int(self.vel[1 - i] * refl_par)
-            elif self.coord[i] > SCREEN_SIZE[i] - self.rad:
-                self.coord[i] = SCREEN_SIZE[i] - self.rad
-                self.vel[i] = -int(self.vel[i] * refl_ort)
-                self.vel[1 - i] = int(self.vel[1 - i] * refl_par)
+        super().__init__(coord=coord, color=color, vel=vel, rad=rad)
 
     def move(self, time=1, grav=0):
         """
@@ -60,7 +78,7 @@ class Shell(GameObject):
         self.vel[1] += grav
         for i in range(2):
             self.coord[i] += time * self.vel[i]
-        self.check_corners()
+        self.check_corners(refl_ort=0.8, refl_par=0.9)
         if self.vel[0] ** 2 + self.vel[1] ** 2 < 2 ** 2 and self.coord[1] > SCREEN_SIZE[1] - 2 * self.rad:
             self.is_alive = False
 
@@ -81,8 +99,8 @@ class Cannon(GameObject):
         Constructor method. Sets coordinate, direction, minimum and maximum power and color of the gun.
         """
         if coord is None:
-            coord = [30, SCREEN_SIZE[1] // 2]
-        super().__init__(coord, color)
+            coord = [SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] - 30]
+        super().__init__(coord=coord, color=color)
         self.angle = angle
         self.max_pow = max_pow
         self.min_pow = min_pow
@@ -119,12 +137,12 @@ class Cannon(GameObject):
         """
         self.angle = np.arctan2(target_pos[1] - self.coord[1], target_pos[0] - self.coord[0])
 
-    def move(self, inc):
+    def move(self, inc=None):
         """
         Changes vertical position of the gun.
         """
-        if (self.coord[1] > 30 or inc > 0) and (self.coord[1] < SCREEN_SIZE[1] - 30 or inc < 0):
-            self.coord[1] += inc
+        if (self.coord[0] > 30 or inc > 0) and (self.coord[0] < SCREEN_SIZE[0] - 30 or inc < 0):
+            self.coord[0] += inc
 
     def draw(self, screen):
         """
@@ -154,8 +172,7 @@ class Target(GameObject):
             coord = [randint(rad, SCREEN_SIZE[0] - rad), randint(rad, SCREEN_SIZE[1] - rad)]
         if color is None:
             color = rand_color()
-        super().__init__(coord, color)
-        self.rad = rad
+        super().__init__(coord=coord, color=color, rad=rad)
 
     def check_collision(self, shell):
         """
@@ -171,23 +188,16 @@ class Target(GameObject):
         """
         pg.draw.circle(screen, self.color, self.coord, self.rad)
 
-    def move(self):
-        """
-        This type of target can't move at all.
-        :return: None
-        """
-        pass
-
 
 class MovingTarget(Target):
     def __init__(self, coord=None, color=None, rad=30):
-        super().__init__(coord, color, rad)
-        self.vx = randint(-2, +2)
-        self.vy = randint(-2, +2)
+        super().__init__(coord=coord, color=color, rad=rad)
+        self.vel = [randint(-2, +2), randint(-2, +2)]
 
-    def move(self):
-        self.coord[0] += self.vx
-        self.coord[1] += self.vy
+    def move(self, inc=None):
+        for i in range(2):
+            self.coord[i] += self.vel[i]
+        self.check_corners(refl_ort=1, refl_par=1)
 
 
 class ScoreTable:
@@ -268,9 +278,11 @@ class Manager:
             if event.type == pg.QUIT:
                 done = True
             elif event.type == pg.KEYDOWN:
-                if event.key == pg.K_UP:
+                if event.key == pg.K_LEFT:
                     self.gun.move(-5)
-                elif event.key == pg.K_DOWN:
+                elif event.key == pg.K_RIGHT:
+                    self.gun.move(5)
+                elif event.key == pg.K_RIGHT:
                     self.gun.move(5)
             elif event.type == pg.MOUSEBUTTONDOWN:
                 if event.button == 1:
